@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: nhatro_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: nhatro_db
+      TZ: "UTC"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: nhatro_backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:secretpassword@postgres:5432/nhatro_db?schema=public
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PAYMENT_WEBHOOK_SECRET=test_secret_123
+      - BANK_BIN=970415
+      - BANK_ACCOUNT_NO=0123456789
+      - BANK_ACCOUNT_NAME=NGUYEN VAN A
+    depends_on:
+      - postgres
+    # Chờ DB khởi động, sau đó Push schema, chạy Seed data và Start server
+    command: sh -c "sleep 5 && npx prisma db push && npx ts-node prisma/seed.ts && npx ts-node src/server.ts"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: nhatro_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

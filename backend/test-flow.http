@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:3000/api
+@invoiceId = inv-test-pending-123
+# Đặt biến secret bằng với PAYMENT_WEBHOOK_SECRET trong .env (nếu chưa set thì bỏ trống cũng được, tùy code logic của bạn)
+@webhookSecret = test_secret_123
+
+### 1. Khởi động ứng dụng (Server)
+# Hãy đảm bảo rằng server đã chạy (npm run start/dev) trước khi gửi các yêu cầu dưới đây.
+
+### 2. Xem trạng thái hóa đơn trước khi thanh toán
+# Status sẽ hiển thị là "PENDING"
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Content-Type: application/json
+
+### 3. API lấy QR Code
+# Trả về URL ảnh QR VietQR có chứa cú pháp thanh toán động: "PAY inv-test-pending-123"
+GET {{baseUrl}}/invoices/{{invoiceId}}/payment-qr
+Content-Type: application/json
+
+### 4. Bắn Webhook IPN giả lập (Ngân hàng báo tiền về)
+# Đóng vai SePay/Casso hoặc ngân hàng gọi tới Webhook của hệ thống
+# Lưu ý: "content" có chứa cụm từ khóa "PAY inv-test-pending-123" 
+POST {{baseUrl}}/payments/webhook
+Content-Type: application/json
+Authorization: Bearer {{webhookSecret}}
+
+{
+  "transactionId": "FT23456789123",
+  "transferAmount": 3000000,
+  "content": "Khach thue phong 101 chuyen tien PAY inv-test-pending-123 nhe",
+  "bankCode": "MBBank"
+}
+
+### 5. Kiểm tra lại trạng thái hóa đơn sau khi bắn Webhook
+# Status bây giờ phải tự động chuyển thành "PAID"
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Content-Type: application/json
