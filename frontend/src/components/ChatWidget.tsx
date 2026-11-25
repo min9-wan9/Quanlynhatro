@@ -1,19 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Send, Bot, User, Loader2, Sparkles, X, MessageCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface Message {
   role: 'model' | 'user';
   text: string;
+  source?: 'gemini' | 'fallback';
 }
 
 export default function ChatWidget() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'model', text: 'Xin chào! Tôi là Trợ lý ảo SmartHost. Bạn cần tra cứu phòng trống, báo cáo sự cố hay hỏi về nội quy?' }
+    { role: 'model', text: 'Xin chào! Tôi là Trợ lý ảo SmartHost. Bạn cần tra cứu phòng trống, hóa đơn, báo cáo sự cố hay hỏi về nội quy?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [chatSource, setChatSource] = useState<'gemini' | 'fallback' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -27,23 +31,36 @@ export default function ChatWidget() {
   }, [messages, loading, isOpen]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || loading) return;
     
-    const userMsg = { role: 'user' as const, text };
+    const userMsg: Message = { role: 'user', text };
+    const historySnapshot = messages;
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/chat', {
+      const response = await axios.post('/api/chat', {
         message: text,
-        history: messages
+        history: historySnapshot,
+        userContext: user
+          ? {
+              id: user.id,
+              name: user.name,
+              phone: user.phone,
+              roomNumber: user.roomNumber,
+              role: user.role,
+            }
+          : undefined,
       });
-      const replyText = response.data.reply || "Xin lỗi, đã có lỗi xảy ra.";
-      setMessages(prev => [...prev, { role: 'model', text: replyText }]);
+      const replyText = response.data.reply || response.data.data?.text || "Xin lỗi, đã có lỗi xảy ra.";
+      const source: 'gemini' | 'fallback' | undefined = response.data.source || response.data.data?.source;
+      if (source) setChatSource(source);
+      setMessages(prev => [...prev, { role: 'model', text: replyText, source }]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: "Xin lỗi, không thể kết nối tới máy chủ." }]);
+      setChatSource('fallback');
+      setMessages(prev => [...prev, { role: 'model', text: "Xin lỗi, không thể kết nối tới máy chủ.", source: 'fallback' }]);
     } finally {
       setLoading(false);
     }
@@ -83,7 +100,11 @@ export default function ChatWidget() {
             </h3>
             <p className="text-[11px] font-medium text-emerald-600 flex items-center">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></span>
-              Đang hoạt động
+              {chatSource === 'gemini'
+                ? 'Gemini AI đang hoạt động'
+                : chatSource === 'fallback'
+                  ? 'Chế độ dự phòng (Form)'
+                  : 'Đang hoạt động'}
             </p>
           </div>
         </div>
@@ -105,7 +126,7 @@ export default function ChatWidget() {
               }`}>
                 {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
               </div>
-              <div className={`p-3.5 text-sm leading-relaxed ${
+              <div className={`p-3.5 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user' 
                   ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm shadow-sm' 
                   : 'bg-white text-slate-700 rounded-2xl rounded-tl-sm shadow-sm border border-slate-200'
