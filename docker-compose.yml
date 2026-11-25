@@ -26,6 +26,10 @@ services:
       - BANK_BIN=970415
       - BANK_ACCOUNT_NO=0123456789
       - BANK_ACCOUNT_NAME=NGUYEN VAN A
+      - VNP_TMN_CODE=${VNP_TMN_CODE:-}
+      - VNP_HASH_SECRET=${VNP_HASH_SECRET:-}
+      - VNP_URL=${VNP_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
     depends_on:
       - postgres
     # Chờ DB khởi động, sau đó Push schema, chạy Seed data và Start server

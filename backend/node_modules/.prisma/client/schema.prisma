@@ -162,10 +162,10 @@ model Payment {
   method        String   @default("BANK_TRANSFER")
   createdAt     DateTime @default(now())
 
-  invoiceId String
-  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
   userId    String
-  user      User    @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model IssueReport {

@@ -7,12 +7,12 @@ import CheckOutRequestModal from '../components/CheckOutRequestModal';
 import ChatWidget from '../components/ChatWidget';
 import { 
   LogOut, UserCircle, Home, Zap, ReceiptText, 
-  Wrench, Bell, FileText, CheckCircle, AlertCircle, Camera, Send, Eye, X, Settings, Wallet
+  Wrench, Bell, FileText, CheckCircle, AlertCircle, Camera, Send, Eye, X, Settings, Wallet, CreditCard, Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function TenantPortal() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -20,6 +20,18 @@ export default function TenantPortal() {
   const [showCheckOut, setShowCheckOut] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
   const [walletInfo, setWalletInfo] = useState({ balance: 0, isAutoPay: false });
+  const [topupAmount, setTopupAmount] = useState('1000000');
+  const [topupBankCode, setTopupBankCode] = useState('NCB');
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupError, setTopupError] = useState('');
+  const [vnpayNotice, setVnpayNotice] = useState<{
+    status: string;
+    type: 'invoice' | 'topup';
+    invoiceId?: string;
+    code?: string;
+    txnNo?: string;
+    amount?: string;
+  } | null>(null);
   
   // Data states
   const [contract, setContract] = useState<any>(null);
@@ -28,12 +40,31 @@ export default function TenantPortal() {
   const [issues, setIssues] = useState<any[]>([]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vnpStatus = params.get('vnpay_status');
+    if (vnpStatus) {
+      const vnpType = params.get('vnpay_type') === 'topup' ? 'topup' : 'invoice';
+      setVnpayNotice({
+        status: vnpStatus,
+        type: vnpType,
+        invoiceId: params.get('invoiceId') || undefined,
+        code: params.get('code') || undefined,
+        txnNo: params.get('txnNo') || undefined,
+        amount: params.get('amount') || undefined,
+      });
+      setActiveTab(vnpType === 'topup' ? 'settings' : 'invoices');
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
     if (!user) {
       navigate('/login');
       return;
     }
     fetchTenantData();
-  }, [user]);
+  }, [user, isLoading]);
 
   const fetchTenantData = async () => {
     try {
@@ -359,6 +390,50 @@ export default function TenantPortal() {
 
         {activeTab === 'invoices' && (
           <div className="space-y-6 animate-in fade-in">
+            {vnpayNotice && vnpayNotice.type === 'invoice' && (
+              <div
+                className={`rounded-xl p-4 border flex items-start justify-between gap-4 ${
+                  vnpayNotice.status === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : vnpayNotice.status === 'cancelled'
+                      ? 'bg-amber-50 border-amber-200 text-amber-800'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {vnpayNotice.status === 'success' ? (
+                    <CheckCircle className="text-emerald-600 mt-0.5 flex-shrink-0" size={20} />
+                  ) : (
+                    <AlertCircle className="mt-0.5 flex-shrink-0" size={20} />
+                  )}
+                  <div className="text-sm">
+                    <p className="font-bold">
+                      {vnpayNotice.status === 'success'
+                        ? 'Thanh toán VNPay Sandbox thành công!'
+                        : vnpayNotice.status === 'cancelled'
+                          ? 'Bạn đã hủy giao dịch VNPay Sandbox.'
+                          : vnpayNotice.status === 'invalid_signature'
+                            ? 'Chữ ký VNPay không hợp lệ (Mã 97).'
+                            : `Thanh toán VNPay Sandbox không thành công${vnpayNotice.code ? ` (Mã ${vnpayNotice.code})` : ''}.`}
+                    </p>
+                    {vnpayNotice.status === 'success' && (
+                      <p className="text-xs mt-1 opacity-90">
+                        {vnpayNotice.amount ? `Số tiền: ${Number(vnpayNotice.amount).toLocaleString('vi-VN')} ₫` : ''}
+                        {vnpayNotice.txnNo ? ` • Mã GD VNPay: ${vnpayNotice.txnNo}` : ''}
+                        {vnpayNotice.invoiceId ? ` • Hóa đơn: ${vnpayNotice.invoiceId.substring(0, 8)}` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setVnpayNotice(null)}
+                  className="p-1 rounded-lg hover:bg-black/5 transition-colors"
+                  title="Đóng thông báo"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
             {invoices.map(inv => (
               <div key={inv.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-4">
@@ -450,39 +525,200 @@ export default function TenantPortal() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
-            {/* Wallet & Auto Pay */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-                <Wallet className="text-indigo-600" size={24} />
-                <h3 className="font-bold text-lg text-slate-800">Ví Nội Bộ & Thanh Toán Tự Động</h3>
-              </div>
-              <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
-                <p className="text-sm text-indigo-800 mb-1">Số dư hiện tại:</p>
-                <p className="text-3xl font-bold text-indigo-600">{walletInfo.balance.toLocaleString()} ₫</p>
-                <p className="text-xs text-indigo-500 mt-2">Quét mã VietQR với nội dung: <strong className="bg-indigo-100 px-1 py-0.5 rounded">TOPUP {user?.id}</strong> để nạp tiền.</p>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div>
-                  <h4 className="font-bold text-slate-800">Tự động thanh toán</h4>
-                  <p className="text-xs text-slate-500 max-w-[200px] mt-1">Hệ thống sẽ tự động trừ tiền trong ví khi có hóa đơn mới.</p>
+          <div className="space-y-6 animate-in fade-in">
+            {vnpayNotice && vnpayNotice.type === 'topup' && (
+              <div
+                className={`rounded-xl p-4 border flex items-start justify-between gap-4 ${
+                  vnpayNotice.status === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : vnpayNotice.status === 'cancelled'
+                      ? 'bg-amber-50 border-amber-200 text-amber-800'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {vnpayNotice.status === 'success' ? (
+                    <CheckCircle className="text-emerald-600 mt-0.5 flex-shrink-0" size={20} />
+                  ) : (
+                    <AlertCircle className="mt-0.5 flex-shrink-0" size={20} />
+                  )}
+                  <div className="text-sm">
+                    <p className="font-bold">
+                      {vnpayNotice.status === 'success'
+                        ? 'Nạp tiền vào ví qua VNPay Sandbox thành công!'
+                        : vnpayNotice.status === 'cancelled'
+                          ? 'Bạn đã hủy giao dịch nạp ví VNPay Sandbox.'
+                          : vnpayNotice.status === 'invalid_signature'
+                            ? 'Chữ ký VNPay không hợp lệ (Mã 97).'
+                            : `Nạp tiền vào ví không thành công${vnpayNotice.code ? ` (Mã ${vnpayNotice.code})` : ''}.`}
+                    </p>
+                    {vnpayNotice.status === 'success' && (
+                      <p className="text-xs mt-1 opacity-90">
+                        {vnpayNotice.amount ? `Số tiền đã cộng vào ví: +${Number(vnpayNotice.amount).toLocaleString('vi-VN')} ₫` : ''}
+                        {vnpayNotice.txnNo ? ` • Mã GD VNPay: ${vnpayNotice.txnNo}` : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={walletInfo.isAutoPay} onChange={async (e) => {
-                    const newValue = e.target.checked;
-                    setWalletInfo({...walletInfo, isAutoPay: newValue});
-                    try {
-                      await axios.put(`/api/users/${user?.id}`, { isAutoPay: newValue });
-                    } catch(err) {
-                      setWalletInfo({...walletInfo, isAutoPay: !newValue});
-                      alert("Lỗi khi cập nhật cài đặt!");
-                    }
-                  }} />
-                  <div className="w-11 h-6 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
+                <button
+                  onClick={() => setVnpayNotice(null)}
+                  className="p-1 rounded-lg hover:bg-black/5 transition-colors"
+                  title="Đóng thông báo"
+                >
+                  <X size={16} />
+                </button>
               </div>
-            </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Wallet & Auto Pay */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                  <Wallet className="text-indigo-600" size={24} />
+                  <h3 className="font-bold text-lg text-slate-800">Ví Nội Bộ & Thanh Toán Tự Động</h3>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
+                  <p className="text-sm text-indigo-800 mb-1">Số dư hiện tại:</p>
+                  <p className="text-3xl font-bold text-indigo-600">{walletInfo.balance.toLocaleString()} ₫</p>
+                </div>
+
+                {/* VNPay Sandbox Wallet Top-up */}
+                <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-4 mb-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-[#005BAA] text-white text-[11px] font-black px-2 py-0.5 rounded">
+                        VNPAY
+                      </span>
+                      <span className="text-sm font-bold text-slate-800">Nạp tiền ví qua VNPay Sandbox</span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                      Test Mode
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {[500000, 1000000, 2000000, 5000000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setTopupAmount(String(preset));
+                          setTopupError('');
+                        }}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                          Number(topupAmount) === preset
+                            ? 'bg-[#005BAA] text-white border-[#005BAA]'
+                            : 'bg-white text-slate-700 border-sky-200 hover:bg-sky-100'
+                        }`}
+                      >
+                        {(preset / 1000).toLocaleString('vi-VN')}k
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Số tiền muốn nạp (VNĐ)
+                      </label>
+                      <input
+                        type="number"
+                        min={10000}
+                        step={10000}
+                        value={topupAmount}
+                        onChange={(e) => {
+                          setTopupAmount(e.target.value);
+                          setTopupError('');
+                        }}
+                        className="w-full bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="Ví dụ: 1000000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Phương thức test
+                      </label>
+                      <select
+                        value={topupBankCode}
+                        onChange={(e) => setTopupBankCode(e.target.value)}
+                        className="w-full bg-white border border-sky-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-sky-500"
+                      >
+                        <option value="NCB">Thẻ nội địa NCB (Test)</option>
+                        <option value="VNBANK">Thẻ ATM nội địa</option>
+                        <option value="VNPAYQR">Cổng VNPAYQR</option>
+                        <option value="INTCARD">Thẻ quốc tế (Test)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {topupError && (
+                    <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                      {topupError}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={topupLoading}
+                    onClick={async () => {
+                      const amountNum = Number(topupAmount);
+                      if (!user?.id) return;
+                      if (!Number.isFinite(amountNum) || amountNum < 10000) {
+                        setTopupError('Số tiền nạp tối thiểu là 10.000 ₫.');
+                        return;
+                      }
+                      setTopupLoading(true);
+                      setTopupError('');
+                      try {
+                        const res = await axios.post('/api/payments/vnpay/create-topup-url', {
+                          userId: user.id,
+                          amount: amountNum,
+                          bankCode: topupBankCode,
+                          clientOrigin: window.location.origin,
+                        });
+                        if (res.data?.success && res.data?.paymentUrl) {
+                          window.location.href = res.data.paymentUrl;
+                        } else {
+                          setTopupError(res.data?.message || 'Không thể tạo giao dịch nạp ví.');
+                          setTopupLoading(false);
+                        }
+                      } catch (err: any) {
+                        setTopupError(
+                          err.response?.data?.message || 'Lỗi kết nối máy chủ khi tạo giao dịch nạp ví.'
+                        );
+                        setTopupLoading(false);
+                      }
+                    }}
+                    className="w-full bg-[#005BAA] hover:bg-[#004A8D] disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm text-sm"
+                  >
+                    {topupLoading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                    Nạp tiền giả lập qua VNPay Sandbox
+                  </button>
+                  <p className="text-[11px] text-slate-500">
+                    Hoặc chuyển khoản VietQR với nội dung: <strong className="bg-white px-1.5 py-0.5 rounded border border-sky-200 font-mono">TOPUP {user?.id}</strong>
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <h4 className="font-bold text-slate-800">Tự động thanh toán</h4>
+                    <p className="text-xs text-slate-500 max-w-[200px] mt-1">Hệ thống sẽ tự động trừ tiền trong ví khi có hóa đơn mới.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={walletInfo.isAutoPay} onChange={async (e) => {
+                      const newValue = e.target.checked;
+                      setWalletInfo({...walletInfo, isAutoPay: newValue});
+                      try {
+                        await axios.put(`/api/users/${user?.id}`, { isAutoPay: newValue });
+                      } catch(err) {
+                        setWalletInfo({...walletInfo, isAutoPay: !newValue});
+                        alert("Lỗi khi cập nhật cài đặt!");
+                      }
+                    }} />
+                    <div className="w-11 h-6 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+              </div>
 
             {/* Thông tin cá nhân */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -557,6 +793,7 @@ export default function TenantPortal() {
                   Xác nhận đổi mật khẩu
                 </button>
               </form>
+            </div>
             </div>
           </div>
         )}
