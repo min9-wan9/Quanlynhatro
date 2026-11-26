@@ -57,13 +57,13 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const [roomsRes, invoicesRes, contractsRes, issuesRes] = await Promise.all([
-        axios.get('/api/rooms').catch(() => ({ data: [] })),
-        axios.get('/api/invoices').catch(() => ({ data: [] })),
-        axios.get('/api/contracts').catch(() => ({ data: [] })),
-        axios.get('/api/issues').catch(() => ({ data: [] }))
+        axios.get('/api/rooms'),
+        axios.get('/api/invoices'),
+        axios.get('/api/contracts'),
+        axios.get('/api/issues')
       ]);
       setAdminIssues(issuesRes.data || []);
-      setRooms(roomsRes.data.length ? roomsRes.data.map((r: any) => {
+      setRooms((roomsRes.data || []).map((r: any) => {
         const utils = r.utilityReadings || [];
         const curr = utils[0] || { powerNumber: 0, waterNumber: 0 };
         const prev = utils[1] || { powerNumber: 0, waterNumber: 0 };
@@ -77,8 +77,8 @@ export default function AdminDashboard() {
           elecPrev: prev.powerNumber,
           waterPrev: prev.waterNumber,
         };
-      }) : mockRooms);
-      setInvoices(invoicesRes.data.length ? invoicesRes.data.map((inv: any) => ({
+      }));
+      setInvoices((invoicesRes.data || []).map((inv: any) => ({
         ...inv,
         id: inv.id,
         title: inv.title,
@@ -87,9 +87,9 @@ export default function AdminDashboard() {
         dueDate: new Date(inv.dueDate).toLocaleDateString('vi-VN'),
         room: inv.user?.contracts?.[0]?.room?.roomNumber || 'Unknown',
         tenant: inv.user?.fullName || 'Unknown'
-      })) : mockInvoices);
+      })));
       
-      setContracts(contractsRes.data.length ? contractsRes.data.map((c: any) => ({
+      setContracts((contractsRes.data || []).map((c: any) => ({
         ...c,
         id: c.id,
         room: c.room?.roomNumber || 'Unknown',
@@ -101,7 +101,7 @@ export default function AdminDashboard() {
         deposit: c.deposit || 0,
         equipments: c.equipments ? c.equipments.split(',') : [],
         checkOutRequest: c.checkOutRequest
-      })) : mockContracts);
+      })));
     } catch (error) {
       setRooms(mockRooms);
       setInvoices(mockInvoices);

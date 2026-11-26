@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { BedDouble, ReceiptText, AlertTriangle, LogOut, UserCircle, Zap, FileSignature, BarChart3 } from 'lucide-react';
+import { BedDouble, ReceiptText, AlertTriangle, LogOut, UserCircle, Zap, FileSignature, BarChart3, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -60,10 +60,26 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             <UserCircle size={24} />
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-bold text-slate-800 truncate">{user?.name || 'Ban Quản Lý'}</p>
-            <p className="text-xs font-semibold text-emerald-600 mt-0.5 inline-block bg-emerald-100 px-2 py-0.5 rounded-md">ADMIN</p>
+            <p className="text-sm font-bold text-slate-800 truncate">{user?.name || 'Chủ Trọ'}</p>
+            <p className={`text-xs font-semibold mt-0.5 inline-block px-2 py-0.5 rounded-md ${
+              user?.role === 'LANDLORD'
+                ? 'text-indigo-700 bg-indigo-100'
+                : 'text-amber-700 bg-amber-100'
+            }`}>
+              {user?.role === 'LANDLORD' ? 'CHỦ TRỌ' : 'ADMIN'}
+            </p>
           </div>
         </div>
+
+        {user?.role === 'ADMIN' && (
+          <button
+            onClick={() => navigate('/system-admin')}
+            className="w-full mb-2 flex items-center justify-center px-4 py-2 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors"
+          >
+            <ShieldCheck className="w-4 h-4 mr-1.5" />
+            Nhật ký & Chủ trọ
+          </button>
+        )}
         
         <button onClick={handleLogout} className="w-full flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors">
           <LogOut className="w-4 h-4 mr-2" />

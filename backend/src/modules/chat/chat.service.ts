@@ -446,7 +446,12 @@ ${qaKnowledgeBase}`;
             : userContext?.id
               ? await prisma.user.findUnique({ where: { id: userContext.id } })
               : null;
-          const room = await prisma.room.findUnique({ where: { roomNumber } });
+          const room = await prisma.room.findFirst({
+            where: {
+              roomNumber,
+              ...(user?.managedById ? { landlordId: user.managedById } : {}),
+            },
+          });
 
           if (!user || !room) {
             return { message: 'Thông tin số điện thoại hoặc số phòng không chính xác.' };
@@ -458,6 +463,7 @@ ${qaKnowledgeBase}`;
               description,
               userId: user.id,
               roomId: room.id,
+              landlordId: room.landlordId,
             },
           });
           return {

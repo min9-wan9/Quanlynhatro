@@ -19,12 +19,12 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    // Chuyển hướng về login và lưu lại trang đang muốn vào
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Nếu role không khớp, đẩy về trang chủ hoặc báo lỗi 403
+    if (user.role === 'ADMIN') return <Navigate to="/system-admin" replace />;
+    if (user.role === 'LANDLORD') return <Navigate to="/admin" replace />;
     return <Navigate to="/" replace />;
   }
 

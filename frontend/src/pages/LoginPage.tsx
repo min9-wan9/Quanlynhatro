@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, Building2, User, KeyRound, Loader2, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Building2, User, KeyRound, Loader2, ArrowRight, Shield } from 'lucide-react';
 import axios from 'axios';
 
 export default function LoginPage() {
-  const [tab, setTab] = useState<'ADMIN' | 'TENANT'>('ADMIN');
+  const [tab, setTab] = useState<'MANAGEMENT' | 'TENANT'>('MANAGEMENT');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -15,7 +15,6 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Đích đến sau khi đăng nhập (nếu có)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -30,11 +29,13 @@ export default function LoginPage() {
       
       const userData = res.data.user;
       
-      if (tab === 'ADMIN') {
+      if (userData.role === 'ADMIN') {
+        login(userData, res.data.token);
+        navigate('/system-admin', { replace: true });
+      } else if (userData.role === 'LANDLORD') {
         login(userData, res.data.token);
         navigate('/admin', { replace: true });
       } else {
-        // Find room number from contract if available
         const roomNumber = userData.contracts?.[0]?.room?.roomNumber || 'Unknown';
         const roomId = userData.contracts?.[0]?.room?.id || '';
         login(
@@ -52,12 +53,23 @@ export default function LoginPage() {
   };
 
   const autoFillAdmin = () => {
+    setTab('MANAGEMENT');
+    setError('');
     setIdentifier('admin@nhatro.com');
     setPassword('hashed_password');
   };
 
-  const autoFillTenant = () => {
-    setIdentifier('0911111111');
+  const autoFillLandlord = (num: 1 | 2) => {
+    setTab('MANAGEMENT');
+    setError('');
+    setIdentifier(num === 1 ? 'chutro1@nhatro.com' : 'chutro2@nhatro.com');
+    setPassword('123456');
+  };
+
+  const autoFillTenant = (phone: string) => {
+    setTab('TENANT');
+    setError('');
+    setIdentifier(phone);
     setPassword('123');
   };
 
@@ -78,7 +90,7 @@ export default function LoginPage() {
               Quản lý trọ <br /> chưa bao giờ <br /> dễ dàng đến thế!
             </h1>
             <p className="text-indigo-200 text-lg">
-              Tự động hóa thanh toán, báo cáo sự cố 24/7 và hệ thống AI hỗ trợ cư dân thông minh.
+              Phân quyền đa Chủ trọ độc lập, giám sát nhật ký hệ thống, thanh toán VNPay Sandbox và trợ lý AI thông minh.
             </p>
           </div>
           
@@ -97,12 +109,12 @@ export default function LoginPage() {
           {/* Tabs */}
           <div className="flex bg-slate-100 p-1 rounded-xl mb-8">
             <button
-              onClick={() => { setTab('ADMIN'); setIdentifier(''); setPassword(''); setError(''); }}
+              onClick={() => { setTab('MANAGEMENT'); setIdentifier(''); setPassword(''); setError(''); }}
               className={`flex-1 py-3 text-sm font-semibold rounded-lg flex items-center justify-center transition-all ${
-                tab === 'ADMIN' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                tab === 'MANAGEMENT' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <Building2 size={18} className="mr-2" /> Chủ trọ / Quản lý
+              <Building2 size={18} className="mr-2" /> Chủ trọ / Admin
             </button>
             <button
               onClick={() => { setTab('TENANT'); setIdentifier(''); setPassword(''); setError(''); }}
@@ -123,22 +135,21 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                {tab === 'ADMIN' ? 'Email hoặc Tên đăng nhập' : 'Số điện thoại'}
+                {tab === 'MANAGEMENT' ? 'Email hoặc Số điện thoại' : 'Số điện thoại'}
               </label>
               <input
-                type={tab === 'ADMIN' ? 'text' : 'tel'}
+                type={tab === 'MANAGEMENT' ? 'text' : 'tel'}
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-800 font-medium"
-                placeholder={tab === 'ADMIN' ? 'admin@nhatro.com' : '0911111111'}
+                placeholder={tab === 'MANAGEMENT' ? 'chutro1@nhatro.com hoặc admin@nhatro.com' : '0911111111'}
               />
             </div>
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex justify-between">
-                <span>{tab === 'ADMIN' ? 'Mật khẩu' : 'Mã phòng (Mật khẩu)'}</span>
-                <a href="#" className="text-indigo-600 hover:underline font-medium text-xs">Quên mật khẩu?</a>
+                <span>Mật khẩu</span>
               </label>
               <div className="relative">
                 <input
@@ -147,7 +158,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-800 font-medium"
-                  placeholder={tab === 'ADMIN' ? '••••••••' : '123'}
+                  placeholder={tab === 'MANAGEMENT' ? '••••••••' : '123'}
                 />
                 <button
                   type="button"
@@ -173,14 +184,43 @@ export default function LoginPage() {
           </form>
 
           {/* Quick Demo Logins */}
-          <div className="mt-8 pt-8 border-t border-slate-100 text-center">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Tài khoản Demo (Bấm để điền)</p>
-            <div className="flex gap-3 justify-center">
-              <button onClick={autoFillAdmin} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-lg flex items-center transition-colors">
-                <KeyRound size={14} className="mr-1.5" /> Demo Admin
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Tài khoản Demo (Bấm để điền)</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button
+                type="button"
+                onClick={autoFillAdmin}
+                className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold py-2 px-3 rounded-lg flex items-center transition-colors"
+              >
+                <Shield size={13} className="mr-1.5" /> Admin Nhật ký
               </button>
-              <button onClick={autoFillTenant} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-lg flex items-center transition-colors">
-                <KeyRound size={14} className="mr-1.5" /> Demo Khách
+              <button
+                type="button"
+                onClick={() => autoFillLandlord(1)}
+                className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold py-2 px-3 rounded-lg flex items-center transition-colors"
+              >
+                <Building2 size={13} className="mr-1.5" /> Chủ Trọ 1
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillLandlord(2)}
+                className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold py-2 px-3 rounded-lg flex items-center transition-colors"
+              >
+                <Building2 size={13} className="mr-1.5" /> Chủ Trọ 2
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillTenant('0911111111')}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-lg flex items-center transition-colors"
+              >
+                <KeyRound size={13} className="mr-1.5" /> Khách Trọ 1
+              </button>
+              <button
+                type="button"
+                onClick={() => autoFillTenant('0933333333')}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 px-3 rounded-lg flex items-center transition-colors"
+              >
+                <KeyRound size={13} className="mr-1.5" /> Khách Trọ 2
               </button>
             </div>
           </div>

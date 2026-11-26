@@ -1,4 +1,5 @@
 import prisma from '../../config/db';
+import { auditService } from '../audit/audit.service';
 import {
   buildVnpSignData,
   formatVnpDate,
@@ -341,6 +342,18 @@ export class PaymentsService {
       processedTopupTxIds.add(paymentTxId);
     }
 
+    await auditService.log({
+      actorId: user.id,
+      actorName: user.fullName,
+      actorRole: user.role,
+      landlordId: user.managedById,
+      action: 'VNPAY_TOPUP',
+      entityType: 'User',
+      entityId: user.id,
+      description: `${user.fullName} nạp ví qua VNPay Sandbox: +${params.vnpAmount.toLocaleString('vi-VN')} đ`,
+      metadata: { txnRef: params.txnRef, transactionNo: params.transactionNo },
+    });
+
     return {
       rspCode: '00',
       message: 'Confirm Success',
@@ -401,7 +414,7 @@ export class PaymentsService {
     const invoiceId = target.id;
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
-      include: { payments: true },
+      include: { payments: true, user: true },
     });
 
     if (!invoice) {
@@ -483,6 +496,18 @@ export class PaymentsService {
       }),
     ]);
 
+    await auditService.log({
+      actorId: invoice.userId,
+      actorName: invoice.user.fullName,
+      actorRole: invoice.user.role,
+      landlordId: invoice.landlordId,
+      action: 'VNPAY_PAYMENT',
+      entityType: 'Invoice',
+      entityId: invoice.id,
+      description: `${invoice.user.fullName} thanh toán hóa đơn "${invoice.title}" qua VNPay Sandbox: ${vnpAmount.toLocaleString('vi-VN')} đ`,
+      metadata: { txnRef, transactionNo, status: newStatus },
+    });
+
     return {
       rspCode: '00',
       message: 'Confirm Success',
@@ -523,6 +548,7 @@ export class PaymentsService {
     // 3. Truy xuất hóa đơn
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
+      include: { user: true },
     });
 
     if (!invoice) {
@@ -562,6 +588,18 @@ export class PaymentsService {
         data: { status: newStatus },
       }),
     ]);
+
+    await auditService.log({
+      actorId: invoice.userId,
+      actorName: invoice.user.fullName,
+      actorRole: invoice.user.role,
+      landlordId: invoice.landlordId,
+      action: 'WEBHOOK_PAYMENT',
+      entityType: 'Invoice',
+      entityId: invoice.id,
+      description: `Thanh toán hóa đơn "${invoice.title}" qua IPN Webhook: ${amountPaid.toLocaleString('vi-VN')} đ (${newStatus})`,
+      metadata: { transactionId, status: newStatus },
+    });
 
     return {
       success: true,

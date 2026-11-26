@@ -12,6 +12,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  LANDLORD
   TENANT
 }
 
@@ -43,19 +44,31 @@ enum InvoiceStatus {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  phone     String?  @unique
-  password  String
-  fullName  String
-  idCard      String?
-  idCardFront String?
-  idCardBack  String?
+  id            String   @id @default(uuid())
+  email         String   @unique
+  phone         String?  @unique
+  password      String
+  fullName      String
+  idCard        String?
+  idCardFront   String?
+  idCardBack    String?
   walletBalance Float    @default(0) // Số dư ví
   isAutoPay     Boolean  @default(false) // Cài đặt tự động thanh toán
-  role        Role     @default(TENANT)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive      Boolean  @default(true) // Trạng thái hoạt động (Admin có thể khóa/mở khóa)
+  role          Role     @default(TENANT)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Khách thuê thuộc quyền quản lý của Chủ trọ nào
+  managedById String?
+  managedBy   User?   @relation("LandlordTenants", fields: [managedById], references: [id])
+  tenants     User[]  @relation("LandlordTenants")
+
+  // Chủ trọ sở hữu các phòng, hóa đơn, sự cố
+  ownedRooms       Room[]        @relation("LandlordRooms")
+  landlordInvoices Invoice[]     @relation("LandlordInvoices")
+  landlordIssues   IssueReport[] @relation("LandlordIssues")
+  activityLogs     ActivityLog[] @relation("ActorLogs")
 
   contracts    Contract[]
   invoices     Invoice[]
@@ -65,7 +78,7 @@ model User {
 
 model Room {
   id          String     @id @default(uuid())
-  roomNumber  String     @unique
+  roomNumber  String
   price       Float
   area        Float?
   status      RoomStatus @default(AVAILABLE)
@@ -73,48 +86,53 @@ model Room {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  landlordId String?
+  landlord   User?   @relation("LandlordRooms", fields: [landlordId], references: [id])
+
   contracts       Contract[]
   utilityReadings UtilityReading[]
   issueReports    IssueReport[]
+
+  @@unique([landlordId, roomNumber])
 }
 
 model Contract {
-  id        String   @id @default(uuid())
-  startDate DateTime
-  endDate   DateTime
-  price     Float?
-  deposit   Float
-  billingCycle Int   @default(1) // Chu kỳ thanh toán (tháng)
-  equipments String?
-  status    ContractStatus @default(PENDING_SIGN)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String         @id @default(uuid())
+  startDate    DateTime
+  endDate      DateTime
+  price        Float?
+  deposit      Float
+  billingCycle Int            @default(1) // Chu kỳ thanh toán (tháng)
+  equipments   String?
+  status       ContractStatus @default(PENDING_SIGN)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
   roomId String
   room   Room   @relation(fields: [roomId], references: [id])
-  
+
   checkOutRequest CheckOutRequest?
 }
 
 model CheckOutRequest {
-  id              String   @id @default(uuid())
+  id              String         @id @default(uuid())
   moveOutDate     DateTime
   reason          String?
   bankAccount     String?
-  
+
   refundAmount    Float?
   deductions      Float?
   deductionReason String?
-  
-  status          CheckOutStatus @default(PENDING)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
-  contractId      String   @unique
-  contract        Contract @relation(fields: [contractId], references: [id])
+  status          CheckOutStatus @default(PENDING)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  contractId String   @unique
+  contract   Contract @relation(fields: [contractId], references: [id])
 }
 
 model UtilityReading {
@@ -135,21 +153,23 @@ model Invoice {
   amount        Float
   status        InvoiceStatus @default(PENDING)
   dueDate       DateTime
-  dynamicQrCode String?       // VietQR dynamic code
-  
+  dynamicQrCode String? // VietQR dynamic code
+
   // Breakdown
-  roomPrice     Float         @default(0)
-  elecUsage     Float         @default(0)
-  elecPrice     Float         @default(3500)
-  waterUsage    Float         @default(0)
-  waterPrice    Float         @default(20000)
-  otherCosts    Float         @default(0)
+  roomPrice  Float @default(0)
+  elecUsage  Float @default(0)
+  elecPrice  Float @default(3500)
+  waterUsage Float @default(0)
+  waterPrice Float @default(20000)
+  otherCosts Float @default(0)
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  userId     String
+  user       User    @relation(fields: [userId], references: [id])
+  landlordId String?
+  landlord   User?   @relation("LandlordInvoices", fields: [landlordId], references: [id])
 
   payments Payment[]
 }
@@ -158,7 +178,7 @@ model Payment {
   id            String   @id @default(uuid())
   amount        Float
   paymentDate   DateTime @default(now())
-  transactionId String?  // Transaction ID from Casso/SePay IPN
+  transactionId String? // Transaction ID from Casso/SePay IPN / VNPay
   method        String   @default("BANK_TRANSFER")
   createdAt     DateTime @default(now())
 
@@ -177,8 +197,31 @@ model IssueReport {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-  roomId String
-  room   Room   @relation(fields: [roomId], references: [id])
+  userId     String
+  user       User    @relation(fields: [userId], references: [id])
+  roomId     String
+  room       Room    @relation(fields: [roomId], references: [id])
+  landlordId String?
+  landlord   User?   @relation("LandlordIssues", fields: [landlordId], references: [id])
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  actor       User?    @relation("ActorLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName   String
+  actorRole   String
+  landlordId  String?
+  action      String
+  entityType  String
+  entityId    String?
+  description String
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([landlordId])
+  @@index([actorId])
+  @@index([action])
 }

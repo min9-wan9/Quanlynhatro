@@ -1,13 +1,16 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import axios from 'axios';
 
-export type Role = 'ADMIN' | 'TENANT';
+export type Role = 'ADMIN' | 'LANDLORD' | 'TENANT';
 
 export interface User {
   id: string;
   name: string;
+  fullName?: string;
   role: Role;
   email?: string;
   phone?: string;
+  idCard?: string;
   roomNumber?: string;
   roomId?: string;
 }
@@ -20,6 +23,16 @@ interface AuthContextType {
   isLoading: boolean;
 }
 
+// Automatically attach Bearer JWT from localStorage on every axios request
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token && !config.headers?.Authorization) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -28,7 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Rehydrate auth state from localStorage on mount
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
@@ -36,7 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
-      } catch (error) {
+        axios.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+      } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -45,10 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (userData: User, jwtToken: string) => {
-    setUser(userData);
+    const normalizedUser: User = {
+      ...userData,
+      name: userData.name || userData.fullName || 'Người dùng',
+    };
+    setUser(normalizedUser);
     setToken(jwtToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('user', JSON.stringify(normalizedUser));
     localStorage.setItem('token', jwtToken);
+    axios.defaults.headers.common.Authorization = `Bearer ${jwtToken}`;
   };
 
   const logout = () => {
@@ -56,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    delete axios.defaults.headers.common.Authorization;
   };
 
   return (
